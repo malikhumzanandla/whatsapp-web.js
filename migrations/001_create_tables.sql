@@ -1,0 +1,23 @@
+CREATE TABLE clients (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    client_id VARCHAR(255) NOT NULL,
+    session_dir VARCHAR(255) NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE api_keys (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    key VARCHAR(255) NOT NULL,
+    client_id INT,
+    FOREIGN KEY (client_id) REFERENCES clients(id),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE whatsapp_sessions (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    client_id INT,
+    session_data TEXT,
+    FOREIGN KEY (client_id) REFERENCES clients(id),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+);

@@ -1,133 +1,182 @@
+/**
+ * WhatsApp Web.js API Server
+ * 
+ * This server provides a REST API for interacting with WhatsApp using the whatsapp-web.js library.
+ * It supports multiple client instances for commercial applications, with API key authentication.
+ * 
+ * @author Your Name
+ * @version 1.0.0
+ */
 const express = require('express');
-const { Client, LocalAuth } = require('./index');
-const qrcode = require('qrcode');
 const bodyParser = require('body-parser');
 const path = require('path');
+const { initializeClient, clients } = require('./whatsappClient');
+const { validateApiKey, validateAdminKey, generateApiKey } = require('./apiKeyManager');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
 
-// Middleware
+// Middleware for parsing request bodies
 app.use(bodyParser.json());
 app.use(express.static('public'));
 
-// Client state tracking
-let qrCodeData = null;
-let isAuthenticated = false;
-let isClientReady = false;
-let authError = null;
-
-// Session directory path
-const sessionDir = path.resolve(process.env.SESSION_DIR || '/app/.wwebjs_auth');
-
-// Initialize WhatsApp client with Docker-specific configuration
-const client = new Client({
-    authStrategy: new LocalAuth({
-        dataPath: sessionDir
-    }),
-    puppeteer: { 
-        headless: true, // Switch to true for server environment
-        args: [
-            '--no-sandbox',
-            '--disable-setuid-sandbox',
-            '--disable-dev-shm-usage',
-            '--disable-accelerated-2d-canvas',
-            '--no-first-run',
-            '--no-zygote',
-            '--disable-gpu',
-            '--disable-features=site-per-process',
-            '--allow-file-access-from-files',
-            '--user-data-dir=/tmp/puppeteer_user_data'
-        ],
-        ignoreDefaultArgs: ['--disable-extensions'],
-        executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || undefined,
+/**
+ * API Key Validation Middleware
+ * 
+ * Validates the API key provided in request headers for all endpoints
+ * except the admin endpoints which use a different authentication method.
+ */
+const apiKeyMiddleware = async (req, res, next) => {
+    // Skip API key validation for the admin endpoint
+    if (req.path === '/api/admin/create-api-key') {
+        return next();
     }
-});
-
-// Initialize client
-client.initialize();
-
-// Client event handlers
-client.on('qr', async (qr) => {
-    console.log('QR RECEIVED', qr);
-    isAuthenticated = false;
-    isClientReady = false;
     
-    // Convert QR code to data URL (base64)
+    const apiKey = req.headers['x-api-key'];
+    if (!apiKey || !(await validateApiKey(apiKey))) {
+        return res.status(403).json({ status: 'error', message: 'Invalid API key' });
+    }
+    next();
+};
+
+app.use(apiKeyMiddleware);
+
+/**
+ * Admin endpoint for creating new API keys
+ * 
+ * This endpoint is protected by the admin API key and allows the creation
+ * of new client-specific API keys that can be used to access other endpoints.
+ * 
+ * @route POST /api/admin/create-api-key
+ * @param {string} adminKey - The admin API key (in x-admin-key header)
+ * @param {string} clientId - The client identifier (in request body)
+ * @returns {Object} Response containing the generated API key
+ */
+app.post('/api/admin/create-api-key', async (req, res) => {
     try {
-        qrCodeData = await qrcode.toDataURL(qr);
-        console.log('QR code generated as base64');
-    } catch (err) {
-        console.error('Error generating QR code', err);
+        const adminKey = req.headers['x-admin-key'];
+        const { clientId } = req.body;
+        
+        // Validate admin key
+        if (!adminKey || !(await validateAdminKey(adminKey))) {
+            return res.status(403).json({ status: 'error', message: 'Invalid admin key' });
+        }
+        
+        // Validate request
+        if (!clientId) {
+            return res.status(400).json({ status: 'error', message: 'Client ID is required' });
+        }
+        
+        // Generate API key
+        const apiKey = await generateApiKey(clientId);
+        
+        return res.json({
+            status: 'success',
+            message: 'API key created successfully',
+            data: {
+                clientId,
+                apiKey
+            }
+        });
+    } catch (error) {
+        console.error('Error creating API key:', error);
+        return res.status(500).json({
+            status: 'error',
+            message: 'Failed to create API key',
+            error: error.message
+        });
     }
 });
 
-client.on('ready', () => {
-    console.log('Client is ready!');
-    isClientReady = true;
-    qrCodeData = null; // Clear QR code as it's no longer needed
+/**
+ * Initialize WhatsApp client instance
+ * 
+ * Creates and initializes a new WhatsApp client instance for the specified client ID.
+ * 
+ * @route POST /api/init
+ * @param {string} clientId - The client identifier (in request body)
+ * @returns {Object} Response indicating successful initialization
+ */
+app.post('/api/init', (req, res) => {
+    const { clientId } = req.body;
+    if (!clientId) {
+        return res.status(400).json({ status: 'error', message: 'Client ID is required' });
+    }
+
+    const sessionDir = path.resolve(process.env.SESSION_DIR || `/app/.wwebjs_auth/${clientId}`);
+    const client = initializeClient(clientId, sessionDir);
+
+    res.json({ status: 'success', message: 'Client initialized', clientId });
 });
 
-client.on('authenticated', () => {
-    console.log('AUTHENTICATED');
-    isAuthenticated = true;
-    authError = null;
-    qrCodeData = null; // Clear QR code as it's no longer needed
-});
+/**
+ * Get client status
+ * 
+ * Retrieves the current authentication and readiness status of a WhatsApp client.
+ * 
+ * @route GET /api/status/:clientId
+ * @param {string} clientId - The client identifier (in URL parameter)
+ * @returns {Object} Response containing the client's status information
+ */
+app.get('/api/status/:clientId', (req, res) => {
+    const { clientId } = req.params;
+    const client = clients[clientId];
 
-client.on('auth_failure', msg => {
-    console.error('AUTHENTICATION FAILURE', msg);
-    isAuthenticated = false;
-    isClientReady = false;
-    authError = msg;
-});
+    if (!client) {
+        return res.status(404).json({ status: 'error', message: 'Client not found' });
+    }
 
-client.on('disconnected', (reason) => {
-    console.log('Client was logged out', reason);
-    isAuthenticated = false;
-    isClientReady = false;
-    qrCodeData = null;
-});
-
-// API Endpoints
-
-// Get client status
-app.get('/api/status', (req, res) => {
     res.json({
-        authenticated: isAuthenticated,
-        ready: isClientReady,
-        error: authError
+        authenticated: client.isAuthenticated,
+        ready: client.isClientReady,
+        error: client.authError
     });
 });
 
-// Get QR code
-app.get('/api/qr', (req, res) => {
-    if (isAuthenticated) {
+/**
+ * Get QR code for WhatsApp authentication
+ * 
+ * Retrieves the QR code that needs to be scanned to authenticate with WhatsApp.
+ * Returns different responses based on the client's current authentication status.
+ * 
+ * @route GET /api/qr/:clientId
+ * @param {string} clientId - The client identifier (in URL parameter)
+ * @returns {Object} Response containing QR code data or status information
+ */
+app.get('/api/qr/:clientId', (req, res) => {
+    const { clientId } = req.params;
+    const client = clients[clientId];
+
+    if (!client) {
+        return res.status(404).json({ status: 'error', message: 'Client not found' });
+    }
+
+    if (client.isAuthenticated) {
         return res.json({
             status: 'authenticated',
             message: 'Client is already authenticated. No need for QR code.'
         });
     }
-    
-    if (isClientReady) {
+
+    if (client.isClientReady) {
         return res.json({
             status: 'ready',
             message: 'Client is ready and authenticated. No need for QR code.'
         });
     }
 
-    if (authError) {
+    if (client.authError) {
         return res.json({
             status: 'error',
             message: 'Authentication error occurred',
-            error: authError
+            error: client.authError
         });
     }
-    
-    if (qrCodeData) {
+
+    if (client.qrCodeData) {
         return res.json({
             status: 'success',
-            qr: qrCodeData
+            qr: client.qrCodeData
         });
     } else {
         return res.json({
@@ -137,10 +186,26 @@ app.get('/api/qr', (req, res) => {
     }
 });
 
-// Send message endpoint
-app.post('/api/sendmessage', async (req, res) => {
+/**
+ * Send WhatsApp message
+ * 
+ * Sends a message to a specified phone number using the client's WhatsApp instance.
+ * 
+ * @route POST /api/sendmessage/:clientId
+ * @param {string} clientId - The client identifier (in URL parameter)
+ * @param {string} number - The recipient's phone number (in request body)
+ * @param {string} message - The message content (in request body)
+ * @returns {Object} Response indicating success or failure
+ */
+app.post('/api/sendmessage/:clientId', async (req, res) => {
+    const { clientId } = req.params;
     const { number, message } = req.body;
-    
+    const client = clients[clientId];
+
+    if (!client) {
+        return res.status(404).json({ status: 'error', message: 'Client not found' });
+    }
+
     if (!number || !message) {
         return res.status(400).json({
             status: 'error',
@@ -148,15 +213,14 @@ app.post('/api/sendmessage', async (req, res) => {
         });
     }
 
-    // Check client state
-    if (!isAuthenticated) {
+    if (!client.isAuthenticated) {
         return res.status(403).json({
             status: 'error',
             message: 'WhatsApp client is not authenticated'
         });
     }
 
-    if (!isClientReady) {
+    if (!client.isClientReady) {
         return res.status(503).json({
             status: 'error',
             message: 'WhatsApp client is authenticated but not ready yet'
@@ -166,10 +230,8 @@ app.post('/api/sendmessage', async (req, res) => {
     try {
         // Format number to proper WhatsApp format if needed
         const formattedNumber = number.includes('@c.us') ? number : `${number}@c.us`;
-        
-        // Send message
-        const result = await client.sendMessage(formattedNumber, message);
-        
+        const result = await client.client.sendMessage(formattedNumber, message);
+
         res.json({
             status: 'success',
             message: 'Message sent successfully',
@@ -187,7 +249,7 @@ app.post('/api/sendmessage', async (req, res) => {
     }
 });
 
-// Start server
+// Start the server on the specified port
 app.listen(PORT, () => {
-    console.log(`Server is running on port ${PORT}`);
+    console.log(`WhatsApp Web.js API Server is running on port ${PORT}`);
 });

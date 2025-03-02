@@ -183,3 +183,107 @@ limitations under the License.
 [digitalocean]: https://m.do.co/c/73f906a36ed4
 [contributing]: https://github.com/pedroslopez/whatsapp-web.js/blob/main/CODE_OF_CONDUCT.md
 [whatsapp]: https://whatsapp.com
+
+# WhatsApp Web.js API Server
+
+A multi-tenant WhatsApp API server based on the whatsapp-web.js library, designed for commercial use.
+
+## Features
+
+- Multi-tenant architecture supporting multiple WhatsApp clients
+- API key-based authentication for secure access
+- REST API for sending messages and managing WhatsApp sessions
+- QR code generation for WhatsApp Web authentication
+- MySQL database integration for client and API key management
+
+## Prerequisites
+
+- Node.js 14 or higher
+- MySQL database
+- Docker (optional, for containerized deployment)
+
+## Installation
+
+1. Clone the repository:
+   ```bash
+   git clone https://github.com/yourusername/whatsapp-web.js-api.git
+   cd whatsapp-web.js-api
+   ```
+
+2. Install dependencies:
+   ```bash
+   npm install
+   ```
+
+3. Set up the database:
+   ```bash
+   # Import the database schema
+   mysql -u your_username -p your_database_name < migrations/001_create_tables.sql
+   ```
+
+4. Configure environment variables:
+   ```bash
+   cp .env.example .env
+   # Edit .env with your configuration
+   ```
+
+## Configuration
+
+Edit the `.env` file with your configuration:
+
+```
+DB_HOST=localhost
+DB_USER=root
+DB_PASSWORD=your_password
+DB_NAME=whatsapp_web
+SESSION_DIR=/path/to/sessions
+ADMIN_API_KEY=your_secure_admin_key
+```
+
+## Usage
+
+1. Start the server:
+   ```bash
+   node server.js
+   ```
+
+2. Create an API key for a client:
+   ```bash
+   curl -X POST http://localhost:3001/api/admin/create-api-key \
+     -H "x-admin-key: your_admin_key" \
+     -H "Content-Type: application/json" \
+     -d '{"clientId": "client001"}'
+   ```
+
+3. Initialize the client:
+   ```bash
+   curl -X POST http://localhost:3001/api/init \
+     -H "x-api-key: client_api_key" \
+     -H "Content-Type: application/json" \
+     -d '{"clientId": "client001"}'
+   ```
+
+4. For more details, see the [API Documentation](./docs/API_DOCUMENTATION.md).
+
+## Docker Deployment
+
+A Dockerfile is provided for containerized deployment:
+
+```bash
+# Build the image
+docker build -t whatsapp-api .
+
+# Run the container
+docker run -p 3001:3001 \
+  -e DB_HOST=host.docker.internal \
+  -e DB_USER=root \
+  -e DB_PASSWORD=password \
+  -e DB_NAME=whatsapp_web \
+  -e ADMIN_API_KEY=your_admin_key \
+  -v /path/to/sessions:/app/.wwebjs_auth \
+  whatsapp-api
+```
+
+## License
+
+[MIT](LICENSE)
