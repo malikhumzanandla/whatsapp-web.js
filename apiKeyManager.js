@@ -30,7 +30,8 @@ const pool = mysql.createPool({
  * @returns {Promise<boolean>} True if the API key is valid, false otherwise
  */
 async function validateApiKey(apiKey) {
-    const [rows] = await pool.execute('SELECT * FROM api_keys WHERE key = ?', [apiKey]);
+    // Updated column name from 'key' to 'api_key'
+    const [rows] = await pool.execute('SELECT * FROM api_keys WHERE api_key = ?', [apiKey]);
     return rows.length > 0;
 }
 
@@ -85,9 +86,9 @@ async function generateApiKey(clientId) {
         clientDbId = clients[0].id;
     }
     
-    // Store the API key in the database
+    // Store the API key in the database - updated column name from 'key' to 'api_key'
     await pool.execute(
-        'INSERT INTO api_keys (key, client_id) VALUES (?, ?)',
+        'INSERT INTO api_keys (api_key, client_id) VALUES (?, ?)',
         [apiKey, clientDbId]
     );
     
