@@ -26,28 +26,45 @@ const clients = {};
  * @returns {Object} The client instance and its status information
  */
 function initializeClient(clientId, sessionDir) {
+    console.log(`Initializing WhatsApp client ${clientId} with session directory: ${sessionDir}`);
+    
+    // Determine browser options based on platform
+    const isWindows = process.platform === 'win32';
+    const puppeteerOpts = {
+        headless: true,
+        args: [
+            '--no-sandbox',
+            '--disable-setuid-sandbox',
+            '--disable-dev-shm-usage',
+            '--disable-accelerated-2d-canvas',
+            '--no-first-run',
+            '--no-zygote',
+            '--disable-gpu',
+            '--disable-features=site-per-process',
+            '--allow-file-access-from-files'
+        ],
+        ignoreDefaultArgs: ['--disable-extensions']
+    };
+    
+    // Only set executablePath if it's explicitly defined in environment
+    if (process.env.PUPPETEER_EXECUTABLE_PATH) {
+        console.log(`Using browser at: ${process.env.PUPPETEER_EXECUTABLE_PATH}`);
+        puppeteerOpts.executablePath = process.env.PUPPETEER_EXECUTABLE_PATH;
+    } else {
+        console.log('No browser path specified, using system default browser');
+    }
+    
+    // If on Windows, don't use the Linux-specific user-data-dir
+    if (!isWindows) {
+        puppeteerOpts.args.push('--user-data-dir=/tmp/puppeteer_user_data');
+    }
+    
     // Configure and create the WhatsApp client
     const client = new Client({
         authStrategy: new LocalAuth({
             dataPath: sessionDir
         }),
-        puppeteer: { 
-            headless: true,
-            args: [
-                '--no-sandbox',
-                '--disable-setuid-sandbox',
-                '--disable-dev-shm-usage',
-                '--disable-accelerated-2d-canvas',
-                '--no-first-run',
-                '--no-zygote',
-                '--disable-gpu',
-                '--disable-features=site-per-process',
-                '--allow-file-access-from-files',
-                '--user-data-dir=/tmp/puppeteer_user_data'
-            ],
-            ignoreDefaultArgs: ['--disable-extensions'],
-            executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || undefined,
-        }
+        puppeteer: puppeteerOpts
     });
 
     // Store client and its status information
@@ -59,8 +76,16 @@ function initializeClient(clientId, sessionDir) {
         authError: null
     };
 
-    // Initialize the client
-    client.initialize();
+    // Initialize the client with better error handling
+    try {
+        client.initialize().catch(err => {
+            console.error(`Error initializing client ${clientId}:`, err);
+            clients[clientId].authError = err.message;
+        });
+    } catch (err) {
+        console.error(`Exception during client ${clientId} initialization:`, err);
+        clients[clientId].authError = err.message;
+    }
 
     // Set up event handlers
 

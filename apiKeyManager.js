@@ -8,20 +8,39 @@
  */
 const mysql = require('mysql2/promise');
 const crypto = require('crypto');
+require('dotenv').config(); // Ensure environment variables are loaded before creating the pool
+const { getSessionDir } = require('./utils/pathHelper');
+
+// Log database connection parameters for debugging
+console.log('Database connection parameters:');
+console.log('DB_HOST:', process.env.DB_HOST || 'not set');
+console.log('DB_USER:', process.env.DB_USER || 'not set');
+console.log('DB_NAME:', process.env.DB_NAME || 'not set');
 
 /**
  * Create a database connection pool
  * This ensures efficient handling of multiple database queries
  */
 const pool = mysql.createPool({
-    host: process.env.DB_HOST,
-    user: process.env.DB_USER,
-    password: process.env.DB_PASSWORD,
-    database: process.env.DB_NAME,
+    host: process.env.DB_HOST || 'localhost',
+    user: process.env.DB_USER || 'root',
+    password: process.env.DB_PASSWORD || '',
+    database: process.env.DB_NAME || 'whatsapp',
     waitForConnections: true,
     connectionLimit: 10,
     queueLimit: 0
 });
+
+// Test database connection on module load
+(async () => {
+    try {
+        const [rows] = await pool.execute('SELECT 1 as connection_test');
+        console.log('✅ Database connection successful:', rows[0].connection_test === 1);
+    } catch (error) {
+        console.error('❌ Database connection failed:', error.message);
+        console.error('Please check your database settings and .env file');
+    }
+})();
 
 /**
  * Validate an API key against the database
@@ -49,17 +68,30 @@ async function validateAdminKey(adminKey) {
  * Create a new client record in the database
  * 
  * @param {string} clientId - The unique client identifier
- * @returns {Promise<number>} The database ID of the newly created client
+ * @returns {Promise<Object>} The created client record
  */
 async function createClient(clientId) {
-    const sessionDir = `/app/.wwebjs_auth/${clientId}`;
-    
-    const [result] = await pool.execute(
-        'INSERT INTO clients (client_id, session_dir) VALUES (?, ?)',
-        [clientId, sessionDir]
-    );
-    
-    return result.insertId;
+    // Use the cross-platform session directory resolver
+    const sessionDir = getSessionDir(clientId);
+   
+    try {
+        // Insert the essential client data
+        const [result] = await pool.execute(
+            'INSERT INTO clients (client_id, session_dir) VALUES (?, ?)',
+            [clientId, sessionDir]
+        );
+        
+        // Get the created client to return it
+        const [clients] = await pool.execute(
+            'SELECT * FROM clients WHERE id = ?',
+            [result.insertId]
+        );
+        
+        return clients[0];
+    } catch (error) {
+        console.error('Error creating client:', error);
+        throw error;
+    }
 }
 
 /**
@@ -95,8 +127,32 @@ async function generateApiKey(clientId) {
     return apiKey;
 }
 
+/**
+ * Get client by client ID
+ * 
+ * Retrieves a client record from the database using its client ID
+ * 
+ * @param {string} clientId - The unique client identifier
+ * @returns {Promise<Object|null>} The client record or null if not found
+ */
+async function getClientByClientId(clientId) {
+    try {
+        const [clients] = await pool.execute(
+            'SELECT * FROM clients WHERE client_id = ?',
+            [clientId]
+        );
+        
+        return clients.length > 0 ? clients[0] : null;
+    } catch (error) {
+        console.error('Error getting client:', error);
+        throw error;
+    }
+}
+
 module.exports = {
     validateApiKey,
     validateAdminKey,
-    generateApiKey
+    generateApiKey,
+    createClient,
+    getClientByClientId  // Export the new function
 };
