@@ -1,6 +1,6 @@
 # WhatsApp Web.js API Documentation
 
-This document provides a comprehensive guide to the WhatsApp Web.js API endpoints, authentication, and usage.
+This document provides a comprehensive guide to the WhatsApp Web.js API endpoints, authentication, and usage for both backend integration and frontend development.
 
 ## Table of Contents
 
@@ -10,9 +10,11 @@ This document provides a comprehensive guide to the WhatsApp Web.js API endpoint
   - [Admin Endpoints](#admin-endpoints)
   - [Client Management](#client-management)
   - [Messaging](#messaging)
-- [Usage Examples](#usage-examples)
+- [Frontend Integration Guide](#frontend-integration-guide)
 - [Error Handling](#error-handling)
+- [WebSocket Events](#websocket-events)
 - [Database Schema](#database-schema)
+- [Example Implementations](#example-implementations)
 
 ## Introduction
 
@@ -63,6 +65,30 @@ Creates a new API key for a client.
   - 403: Invalid admin key
   - 500: Server error
 
+#### Create New Client
+
+Creates a new client record with a unique ID.
+
+- **URL**: `/api/admin/create-client`
+- **Method**: `POST`
+- **Authentication**: Admin key required (`x-admin-key` header)
+- **Request Body**: Empty (client ID is generated automatically)
+- **Success Response**:
+  ```json
+  {
+    "status": "success",
+    "message": "Client created successfully",
+    "data": {
+      "clientId": "auto_generated_uuid",
+      "sessionDir": "/path/to/session",
+      "createdAt": "2023-05-01T12:00:00Z"
+    }
+  }
+  ```
+- **Error Responses**:
+  - 403: Invalid admin key
+  - 500: Server error
+
 ### Client Management
 
 #### Initialize Client
@@ -83,12 +109,14 @@ Initializes a WhatsApp client instance for a specific client ID.
   {
     "status": "success",
     "message": "Client initialized",
-    "clientId": "unique_client_identifier"
+    "clientId": "unique_client_identifier",
+    "sessionDir": "/path/to/session"
   }
   ```
 - **Error Responses**:
   - 400: Client ID is missing
   - 403: Invalid API key
+  - 404: Client not found
   - 500: Server error
 
 #### Get Client Status
@@ -128,7 +156,35 @@ Retrieves the QR code for WhatsApp authentication if needed.
   }
   ```
 - **Alternative Responses**:
-  - Authentication status messages when QR code is not needed
+  - When already authenticated:
+    ```json
+    {
+      "status": "authenticated",
+      "message": "Client is already authenticated. No need for QR code."
+    }
+    ```
+  - When client is ready:
+    ```json
+    {
+      "status": "ready",
+      "message": "Client is ready and authenticated. No need for QR code."
+    }
+    ```
+  - When authentication error occurred:
+    ```json
+    {
+      "status": "error",
+      "message": "Authentication error occurred",
+      "error": "Error details"
+    }
+    ```
+  - When QR code is not yet available:
+    ```json
+    {
+      "status": "waiting",
+      "message": "QR code not yet available. Please try again in a few seconds."
+    }
+    ```
 - **Error Responses**:
   - 403: Invalid API key
   - 404: Client not found
@@ -168,86 +224,29 @@ Sends a WhatsApp message to a specified phone number.
   - 500: Server error
   - 503: Client not ready
 
-## Usage Examples
+## Frontend Integration Guide
 
-### Creating a New Client
+### Overview
 
-1. Generate an API key for the client using admin authentication
-2. Initialize the client with the new API key
-3. Retrieve the QR code for the client to scan
-4. Monitor the client status until it's ready
-5. Start sending messages
+The frontend will primarily interact with the WhatsApp Web.js API to:
+1. Initialize client instances
+2. Display QR codes for authentication
+3. Monitor client status
+4. Send messages
 
-Example with curl:
+### Authentication Flow
 
-```bash
-# Create API key
-curl -X POST http://localhost:3001/api/admin/create-api-key \
-  -H "x-admin-key: your-secure-admin-key-here" \
-  -H "Content-Type: application/json" \
-  -d '{"clientId": "client001"}'
+1. **Admin Panel**:
+   - Create a client using the admin endpoint
+   - Generate an API key for the client
+   - Store this API key securely
 
-# Initialize client
-curl -X POST http://localhost:3001/api/init \
-  -H "x-api-key: generated_api_key" \
-  -H "Content-Type: application/json" \
-  -d '{"clientId": "client001"}'
+2. **Client Authentication**:
+   - Initialize the client instance
+   - Poll the QR code endpoint until a QR code is available
+   - Display the QR code to the user for scanning with their WhatsApp app
+   - Poll the status endpoint until the client is authenticated and ready
 
-# Get QR code
-curl -X GET http://localhost:3001/api/qr/client001 \
-  -H "x-api-key: generated_api_key"
+### QR Code Display
 
-# Check status
-curl -X GET http://localhost:3001/api/status/client001 \
-  -H "x-api-key: generated_api_key"
-
-# Send a message
-curl -X POST http://localhost:3001/api/sendmessage/client001 \
-  -H "x-api-key: generated_api_key" \
-  -H "Content-Type: application/json" \
-  -d '{"number": "1234567890", "message": "Hello from API!"}'
-```
-
-## Error Handling
-
-All API endpoints return appropriate HTTP status codes:
-
-- `200`: Successful operation
-- `400`: Bad request (missing parameters)
-- `403`: Authentication failed
-- `404`: Resource not found
-- `500`: Server error
-- `503`: Service unavailable (client not ready)
-
-Error responses include a JSON body with details:
-
-```json
-{
-  "status": "error",
-  "message": "Error description",
-  "error": "Detailed error information (optional)"
-}
-```
-
-## Database Schema
-
-The API uses the following database tables:
-
-1. **clients**: Stores client information
-   - `id`: Auto-incremented primary key
-   - `client_id`: Unique client identifier
-   - `session_dir`: Path to the WhatsApp session data
-   - `created_at`: Timestamp of creation
-
-2. **api_keys**: Stores API keys for clients
-   - `id`: Auto-incremented primary key
-   - `key`: The API key string
-   - `client_id`: Foreign key referencing `clients.id`
-   - `created_at`: Timestamp of creation
-
-3. **whatsapp_sessions**: Stores session information
-   - `id`: Auto-incremented primary key
-   - `client_id`: Foreign key referencing `clients.id`
-   - `session_data`: Session data (JSON)
-   - `created_at`: Timestamp of creation
-   - `updated_at`: Timestamp of last update
+When receiving a base64-encoded QR code from the API:

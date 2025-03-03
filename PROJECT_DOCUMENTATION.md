@@ -18,25 +18,5 @@ This service is designed specifically as a backend API without its own user inte
 4. **Path Helper (utils/pathHelper.js)** - Cross-platform path handling utilities
 5. **Database** - MySQL database for storing client information and API keys
 
-## Shared Memory Between Developer and Assistant
-
-This documentation file serves as a persistent "shared memory" between the human developer and the AI assistant. Its purpose is to:
-
-1. **Maintain Context**: The AI assistant will read this document in future sessions to understand project history, decisions, and architecture.
-
-2. **Continuous Updates**: Both the developer and AI will update this document as the project evolves, recording new decisions, changes, and lessons learned.
-
-3. **Single Source of Truth**: This file serves as the authoritative reference for project understanding, preventing misunderstandings or contradictory approaches.
-
-4. **Knowledge Persistence**: Even as development sessions come and go, this document ensures that context isn't lost and past discussions don't need to be repeated.
-
-The AI assistant commits to:
-- Reading this document at the start of new development sessions
-- Suggesting updates to this document when significant changes or decisions are made
-- Using the information here to guide recommendations and avoid contradicting established project principles
-- Maintaining awareness of the project's backend-only, multi-client nature and its integration with PHP applications
-
-This approach ensures consistent understanding and continuous improvement as the project develops over time.
-
-### System Context
+### System Context Diagram
 

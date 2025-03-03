@@ -33,7 +33,7 @@ const apiKeyMiddleware = async (req, res, next) => {
     if (req.path === '/api/admin/create-api-key' || req.path === '/api/admin/create-client') {
         return next();
     }
-    
+
     const apiKey = req.headers['x-api-key'];
     if (!apiKey || !(await validateApiKey(apiKey))) {
         return res.status(403).json({ status: 'error', message: 'Invalid API key' });
@@ -59,20 +59,20 @@ app.post('/api/admin/create-api-key', async (req, res) => {
         const adminKey = req.headers['x-admin-key'];
         // console.log('adminKey:', adminKey);
         const { clientId } = req.body;
-        
+
         // Validate admin key
         if (!adminKey || !(await validateAdminKey(adminKey))) {
             return res.status(403).json({ status: 'error', message: 'Invalid admin key' });
         }
-        
+
         // Validate request
         if (!clientId) {
             return res.status(400).json({ status: 'error', message: 'Client ID is required' });
         }
-        
+
         // Generate API key
         const apiKey = await generateApiKey(clientId);
-        
+
         return res.json({
             status: 'success',
             message: 'API key created successfully',
@@ -102,20 +102,20 @@ app.post('/api/admin/create-api-key', async (req, res) => {
  * @returns {Object} Response containing the generated client ID and client data
  */
 app.post('/api/admin/create-client', async (req, res) => {
-    try { 
+    try {
         const adminKey = req.headers['x-admin-key'];
-        
+
         // Validate admin key
         if (!adminKey || !(await validateAdminKey(adminKey))) {
             return res.status(403).json({ status: 'error', message: 'Invalid admin key' });
         }
-        
+
         // Generate a unique client ID
         const clientId = uuidv4();
-        
+
         // Store the client in the database (just the essential data)
         const client = await createClient(clientId);
-        
+
         return res.json({
             status: 'success',
             message: 'Client created successfully',
@@ -154,11 +154,11 @@ app.post('/api/init', async (req, res) => {
 
         // Get client from database to get the correct session directory
         const clientRecord = await getClientByClientId(clientId);
-        
+
         if (!clientRecord) {
-            return res.status(404).json({ 
-                status: 'error', 
-                message: 'Client not found. Please create the client first.' 
+            return res.status(404).json({
+                status: 'error',
+                message: 'Client not found. Please create the client first.'
             });
         }
 
@@ -166,17 +166,17 @@ app.post('/api/init', async (req, res) => {
         // We don't need to use path.resolve here as the stored path should already be platform-specific
         const sessionDir = clientRecord.session_dir;
         console.log(`Initializing client ${clientId} with session directory: ${sessionDir}`);
-        
+
         const client = initializeClient(clientId, sessionDir);
 
-        res.json({ 
-            status: 'success', 
-            message: 'Client initialized', 
+        res.json({
+            status: 'success',
+            message: 'Client initialized',
             clientId,
             sessionDir
         });
     } catch (error) {
-        console.error(`Error initializing client:`, error);
+        console.error('Error initializing client:', error);
         res.status(500).json({
             status: 'error',
             message: 'Failed to initialize client',
