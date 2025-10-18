@@ -1,7 +1,7 @@
 <div align="center">
     <br />
     <p>
-        <a href="https://wwebjs.dev"><img src="https://github.com/wwebjs/logos/blob/main/4_Full%20Logo%20Lockup_Small/small_banner_blue.png?raw=true" title="whatsapp-web.js" alt="WWebJS Website" width="500" /></a>
+        <a href="https://wwebjs.dev"><img src="https://github.com/wwebjs/assets/blob/main/Collection/GitHub/wwebjs.png?raw=true" title="whatsapp-web.js" alt="WWebJS Website" width="500" /></a>
     </p>
     <br />
     <h1>WhatsApp Web.js API Server</h1>
@@ -181,9 +181,9 @@ This project uses the WhatsApp Web.js library, which works by launching the What
 | Set user status message | ✅ |
 | React to messages | ✅ |
 | Create polls | ✅ |
+| Channels | ✅ |
 | Vote in polls | 🔜 |
 | Communities | 🔜 |
-| Channels | 🔜 |
 
 ## Contributing
 
@@ -231,7 +231,6 @@ See the License for the specific language governing permissions and
 limitations under the License.  
 
 
-[website]: https://wwebjs.dev
 [guide]: https://guide.wwebjs.dev/guide
 [guide-source]: https://github.com/wwebjs/wwebjs.dev/tree/main
 [documentation]: https://docs.wwebjs.dev/
