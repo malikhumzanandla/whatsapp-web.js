@@ -1,0 +1,22 @@
+services:
+  whatsapp-web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: whatsapp-web-server
+    restart: unless-stopped
+    environment:
+      - PORT=3001
+    ports:
+      - "127.0.0.1:3001:3001"  # Bind only to localhost interface
+    volumes:
+      - ./data/.wwebjs_auth:/app/.wwebjs_auth
+      - ./data/.wwebjs_cache:/app/.wwebjs_cache
+    shm_size: '2gb'
+    networks:
+      - whatsapp-network
+
+networks:
+  whatsapp-network:
+    driver: bridge
+    internal: false  # Not setting to true as we still need localhost access
